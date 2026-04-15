@@ -7,7 +7,10 @@ tags:
 metadata:
   workflow: openspec-proposal
   priority: correctness-over-speed
-  requires: openspec-proposal
+  requires:
+    - openspec-proposal
+    - backend-defensive-engineering
+    - backend-runtime-safety-lifecycle
 ---
 
 Canonical architecture contract module for Node.js + TypeScript + Express.
@@ -16,18 +19,18 @@ Canonical architecture contract module for Node.js + TypeScript + Express.
 
 ```text
 src/
-|- controllers/   # HTTP request/response mapping only
-|- services/      # Use-case rules, invariants, orchestration
-|- repositories/  # Persistence contracts and mapping
-|- models/        # Domain models
-|- middleware/    # Express middleware
-|- routes/        # Route wiring and middleware order
-|- utils/         # Pure helpers
-|- config/        # App config (excluding DB bootstrap details)
-|- types/         # TS contracts
+|- controllers/   # HTTP mapping only
+|- services/      # use-case rules and orchestration
+|- repositories/  # persistence mapping and DTO contracts
+|- models/
+|- middleware/
+|- routes/
+|- utils/
+|- config/
+|- types/
 ```
 
-Structural deviations require explicit user approval and documented rationale.
+Structural deviation requires explicit approval.
 
 ## Boundary Model
 
@@ -36,18 +39,25 @@ Route -> Controller -> Service -> Repository -> Datastore
 Datastore -> Repository mapper -> Repository DTO -> Service -> Controller response
 ```
 
-Rules:
-
 - Controllers do not own business rules or persistence logic.
-- Services do not return raw datastore row/document shapes.
-- Repositories own mapping/normalization and return explicit DTO contracts.
+- Services do not return raw datastore shapes.
+- Repositories own mapping and explicit DTO outputs.
+
+## Rationalization Table - Architecture Violations
+
+| Excuse                                  | Reality                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| "Business logic is request-specific"    | Request shaping belongs in controllers; business rules stay in services. |
+| "Raw DB rows are fine for now"          | Raw shapes create unstable contracts and downstream breakage.            |
+| "Service can know HTTP for convenience" | HTTP-coupled services are harder to reuse and test.                      |
+| "Invariants are obvious from code"      | Implicit invariants are unverifiable and easy to violate.                |
 
 ## Repository DTO Contract Rules
 
-- Define DTO contracts for query/filter inputs, mutation inputs, and read outputs.
-- Keep nullability explicit and deterministic in output shape.
-- Block sensitive/internal fields unless explicitly required by contract.
-- Stabilize DTO shape for testability and client compatibility.
+- Define DTO contracts for query/filter, mutation, and read outputs.
+- Keep nullability explicit and deterministic.
+- Block sensitive/internal fields unless required by contract.
+- Stabilize DTO shape for testability and compatibility.
 
 ## Error Taxonomy (Required)
 
@@ -58,23 +68,72 @@ Rules:
 - Conflict/invariant violations -> 409
 - Unexpected/internal failures -> 500
 
-Apply category mapping consistently per capability.
+Apply mapping consistently per capability.
 
 ## Invariant Discipline
 
-For mutating workflows, explicitly define and preserve:
+For mutating workflows, preserve:
 
 - Referential consistency
-- No orphaned dependent records/documents
+- No orphaned dependents
 - Idempotent behavior when required
 - Partial-failure handling (transaction, rollback, or compensation)
 
-If invariants cannot be guaranteed by the current approach, pause and revise design artifacts first.
+If invariants cannot be guaranteed, pause and revise artifacts first.
 
-## Common Pitfalls
+## RED-GREEN-REFACTOR for Architecture Contracts
 
-- Business logic leaking into controllers
-- Services coupled to raw datastore output
-- Missing null/empty guards
-- Inconsistent error category mapping
-- Untracked structural deviations that erode maintainability
+### RED: Validate boundaries
+
+- **Trigger**: new endpoint planning.
+- **Action**: audit route-controller-service-repository boundaries.
+- **Verification**: no controller business logic and no raw output leakage.
+
+### GREEN: Define stable contracts
+
+- **Trigger**: boundaries are clean.
+- **Action**: define explicit repository DTO inputs and outputs.
+- **Verification**: deterministic shape, explicit nullability, sensitive field control.
+
+### REFACTOR: Preserve invariants
+
+- **Trigger**: mutating workflow or partial-failure risk appears.
+- **Action**: tighten referential/idempotency/rollback guarantees.
+- **Verification**: invariants hold across edge and failure paths.
+
+```dot
+digraph architecture_boundary_flow {
+  endpoint [label="New endpoint", shape=ellipse];
+  ctrl [label="Controller has business logic?", shape=diamond];
+  raw [label="Service returns raw datastore shape?", shape=diamond];
+  extract [label="Move logic to service", shape=box];
+  dto [label="Define repository DTOs", shape=box];
+  valid [label="Boundary valid", shape=ellipse];
+
+  endpoint -> ctrl;
+  ctrl -> extract [label="Yes"];
+  ctrl -> raw [label="No"];
+  extract -> raw;
+  raw -> dto [label="Yes"];
+  raw -> valid [label="No"];
+  dto -> valid;
+}
+```
+
+## Red Flags - Immediate Stop Conditions
+
+- CONTROLLER OWNS BUSINESS RULES.
+- SERVICE RETURNS RAW DATASTORE SHAPES.
+- MISSING EXPLICIT DTO CONTRACTS.
+- INVARIANTS IMPLIED BUT NOT DEFINED.
+- STRUCTURAL DEVIATION WITHOUT APPROVAL.
+
+When flagged: **Stop -> isolate violation -> correct boundary/contract -> continue.**
+
+## REQUIRED BACKGROUND
+
+- **REQUIRED** `openspec-proposal`
+- **REQUIRED** `backend-defensive-engineering`
+- **REQUIRED** `backend-runtime-safety-lifecycle`
+
+Related: `backend-redis-application-patterns`, `backend-node-init-minimal`.

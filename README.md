@@ -1,7 +1,7 @@
 # OpenCode Skills Repository
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
-![GitHub last commit](https://img.shields.io/github/last-commit/roehannicholas/opencode-skills)
+![GitHub last commit](https://img.shields.io/github/last-commit/Solenad/opencode-skills)
 
 A comprehensive collection of modular AI agent skills designed for OpenCode, focused primarily on backend development, DevOps practices, and development workflow automation.
 
